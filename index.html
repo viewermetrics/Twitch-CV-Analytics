@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitch CV Analytics</title>
+
+    <!-- Material-UI CSS -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+
+    <!-- React and ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- MUI -->
+    <script src="https://unpkg.com/@mui/material@5.14.20/umd/material-ui.production.min.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Babel Standalone for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', sans-serif;
+            background: #0a1929;
+        }
+
+        #root {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stream-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .stream-preview {
+            width: 80px;
+            height: 45px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .tag-chip {
+            display: inline-block;
+            margin: 2px;
+            padding: 2px 8px;
+            background: #e0e0e0;
+            border-radius: 12px;
+            font-size: 0.75rem;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 250px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const {
+            Box,
+            Container,
+            Typography,
+            Button,
+            TextField,
+            Table,
+            TableBody,
+            TableCell,
+            TableContainer,
+            TableHead,
+            TableRow,
+            Paper,
+            TableSortLabel,
+            IconButton,
+            Chip,
+            Grid,
+            Card,
+            CardContent,
+            CircularProgress,
+            Alert,
+            FormControl,
+            InputLabel,
+            Select,
+            MenuItem,
+            Toolbar,
+            AppBar,
+            Dialog,
+            DialogTitle,
+            DialogContent,
+            DialogActions
+        } = MaterialUI;
+
+        // Twitch Client ID from test script
+        const CLIENT_ID = 'kd1unb4b3q4t58fwlpcbzcbnm76a8fp';
+
+        const { createTheme, ThemeProvider } = MaterialUI;
+
+        const darkTheme = createTheme({
+            palette: {
+                mode: 'dark',
+                primary: {
+                    main: '#1976d2',
+                    light: '#42a5f5',
+                    dark: '#1565c0',
+                },
+                secondary: {
+                    main: '#90caf9',
+                },
+                background: {
+                    default: '#0a1929',
+                    paper: '#0d1b2a',
+                },
+                text: {
+                    primary: '#e3f2fd',
+                    secondary: '#90caf9',
+                },
+            },
+            components: {
+                MuiTableCell: {
+                    styleOverrides: {
+                        head: {
+                            backgroundColor: '#1565c0',
+                            color: '#e3f2fd',
+                            fontWeight: 'bold',
+                        },
+                        root: {
+                            borderBottom: '1px solid #1e3a5f',
+                        },
+                    },
+                },
+                MuiTableRow: {
+                    styleOverrides: {
+                        root: {
+                            '&:hover': {
+                                backgroundColor: '#1a2942',
+                            },
+                        },
+                    },
+                },
+                MuiPaper: {
+                    styleOverrides: {
+                        root: {
+                            backgroundImage: 'none',
+                        },
+                    },
+                },
+                MuiCard: {
+                    styleOverrides: {
+                        root: {
+                            backgroundColor: '#0d1b2a',
+                            borderRadius: 8,
+                            border: '1px solid #1e3a5f',
+                        },
+                    },
+                },
+            },
+        });
+
+        const StreamAnalytics = () => {
+            const [streams, setStreams] = React.useState([]);
+            const [filteredStreams, setFilteredStreams] = React.useState([]);
+            const [loading, setLoading] = React.useState(false);
+            const [error, setError] = React.useState(null);
+            const [searchTerm, setSearchTerm] = React.useState('');
+            const [orderBy, setOrderBy] = React.useState('viewersCount');
+            const [order, setOrder] = React.useState('desc');
+            const [gameFilter, setGameFilter] = React.useState('all');
+            const [cvFilter, setCvFilter] = React.useState('all');
+            const [page, setPage] = React.useState(0);
+            const [rowsPerPage, setRowsPerPage] = React.useState(50);
+            const [scanCount, setScanCount] = React.useState(100);
+            const [loadingProgress, setLoadingProgress] = React.useState({ current: 0, target: 0 });
+
+            const chartRefs = {
+                gamesChart: React.useRef(null),
+                chattersCountChart: React.useRef(null)
+            };
+
+            const chartInstances = React.useRef({});
+
+            // Handle sort
+            const handleSort = (column) => {
+                const isAsc = orderBy === column && order === 'asc';
+                setOrder(isAsc ? 'desc' : 'asc');
+                setOrderBy(column);
+                setPage(0); // Reset to first page on sort
+            };
+
+            // Load data on mount - fetch first 100 streams
+            React.useEffect(() => {
+                fetchStreams(100);
+            }, []);
+
+            // Update filtered streams when filters change
+            React.useEffect(() => {
+                let filtered = [...streams];
+
+                // Filter by game
+                if (gameFilter !== 'all') {
+                    filtered = filtered.filter(s => s.game?.name === gameFilter);
+                }
+
+                // Filter by C/V type
+                if (cvFilter !== 'all') {
+                    filtered = filtered.filter(s => {
+                        const indicator = getChatterIndicator(s.chatterPercentage || 0);
+                        return indicator.label === cvFilter;
+                    });
+                }
+
+                // Filter by search term
+                if (searchTerm) {
+                    const term = searchTerm.toLowerCase();
+                    filtered = filtered.filter(s =>
+                        s.title?.toLowerCase().includes(term) ||
+                        s.broadcaster?.displayName?.toLowerCase().includes(term) ||
+                        s.broadcaster?.login?.toLowerCase().includes(term) ||
+                        s.game?.name?.toLowerCase().includes(term)
+                    );
+                }
+
+                // Sort
+                filtered.sort((a, b) => {
+                    let aVal, bVal;
+
+                    switch (orderBy) {
+                        case 'viewersCount':
+                            aVal = Number(a.viewersCount) || 0;
+                            bVal = Number(b.viewersCount) || 0;
+                            break;
+                        case 'broadcaster':
+                            aVal = (a.broadcaster?.displayName || '').toLowerCase();
+                            bVal = (b.broadcaster?.displayName || '').toLowerCase();
+                            break;
+                        case 'game':
+                            aVal = (a.game?.name || '').toLowerCase();
+                            bVal = (b.game?.name || '').toLowerCase();
+                            break;
+                        case 'title':
+                            aVal = (a.title || '').toLowerCase();
+                            bVal = (b.title || '').toLowerCase();
+                            break;
+                        case 'chatters':
+                            aVal = Number(a.chatters) || 0;
+                            bVal = Number(b.chatters) || 0;
+                            break;
+                        case 'chatterPercentage':
+                            aVal = Number(a.chatterPercentage) || 0;
+                            bVal = Number(b.chatterPercentage) || 0;
+                            break;
+                        default:
+                            aVal = Number(a.viewersCount) || 0;
+                            bVal = Number(b.viewersCount) || 0;
+                    }
+
+                    let result;
+                    if (typeof aVal === 'string') {
+                        result = aVal.localeCompare(bVal);
+                    } else {
+                        result = aVal - bVal;
+                    }
+
+                    // If values are equal, sort by ID for stability
+                    if (result === 0) {
+                        return a.id.localeCompare(b.id);
+                    }
+
+                    return order === 'asc' ? result : -result;
+                });
+
+                setFilteredStreams(filtered);
+                setPage(0); // Reset to first page when filter/sort changes
+            }, [streams, searchTerm, orderBy, order, gameFilter, cvFilter]);
+
+            // Update charts when filtered streams change (debounced)
+            React.useEffect(() => {
+                if (filteredStreams.length > 0) {
+                    const timer = setTimeout(() => {
+                        updateCharts();
+                    }, 300); // Debounce chart updates
+                    return () => clearTimeout(timer);
+                }
+            }, [filteredStreams]);
+
+            const fetchStreams = async (targetCount) => {
+                setLoading(true);
+                setError(null);
+                let allStreams = [];
+                let cursor = null;
+                setScanCount(targetCount);
+                setLoadingProgress({ current: 0, target: targetCount });
+
+                try {
+                    const query = `
+                        query BrowsePopular($cursor: Cursor) {
+                            streams(first: 30, options: { sort: VIEWER_COUNT, recommendationsContext: { platform: "web" } }, after: $cursor) {
+                                edges {
+                                    cursor
+                                    node {
+                                        id
+                                        title
+                                        viewersCount
+                                        previewImageURL(width: 440, height: 248)
+                                        broadcaster {
+                                            id
+                                            login
+                                            displayName
+                                            profileImageURL(width: 50)
+                                            primaryColorHex
+                                            roles {
+                                                isPartner
+                                                isParticipatingDJ
+                                            }
+                                        }
+                                        freeformTags {
+                                            id
+                                            name
+                                        }
+                                        game {
+                                            id
+                                            slug
+                                            name
+                                            displayName
+                                            boxArtURL(width: 40, height: 56)
+                                        }
+                                        type
+                                    }
+                                }
+                                pageInfo {
+                                    hasNextPage
+                                }
+                            }
+                        }
+                    `;
+
+                    while (allStreams.length < targetCount) {
+                        const variables = {};
+                        if (cursor) {
+                            variables.cursor = cursor;
+                        }
+
+                        const body = {
+                            "operationName": "BrowsePopular",
+                            "query": query,
+                            "variables": variables
+                        };
+
+                        const response = await fetch('https://gql.twitch.tv/gql', {
+                            method: 'POST',
+                            headers: {
+                                'Client-Id': CLIENT_ID,
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(body)
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        if (data.errors) {
+                            throw new Error(data.errors[0]?.message || 'GraphQL error');
+                        }
+
+                        const edges = data.data?.streams?.edges || [];
+                        const streamData = edges.map(edge => edge.node);
+
+                        if (streamData.length === 0) {
+                            break; // No more streams available
+                        }
+
+                        allStreams = [...allStreams, ...streamData];
+
+                        // Update progress
+                        setLoadingProgress({ current: allStreams.length, target: targetCount });
+
+                        // Stop if we've reached target or no more pages
+                        if (allStreams.length >= targetCount || edges.length === 0) {
+                            break;
+                        }
+
+                        cursor = edges[edges.length - 1].cursor;
+
+                        // Small delay to avoid rate limiting
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+
+                    // Deduplicate streams by ID
+                    const uniqueStreamsMap = new Map();
+                    allStreams.forEach(stream => {
+                        if (!uniqueStreamsMap.has(stream.id)) {
+                            uniqueStreamsMap.set(stream.id, stream);
+                        }
+                    });
+                    allStreams = Array.from(uniqueStreamsMap.values());
+
+                    // Trim to target count if we got more
+                    allStreams = allStreams.slice(0, targetCount);
+
+                    // Fetch chatter counts for all streams
+                    const logins = allStreams.map(s => s.broadcaster?.login).filter(Boolean);
+                    if (logins.length > 0) {
+                        const chatterCounts = await fetchChatterCounts(logins);
+                        // Add chatter data to streams
+                        allStreams.forEach(stream => {
+                            const login = stream.broadcaster?.login;
+                            if (login && chatterCounts[login] !== undefined) {
+                                stream.chatters = chatterCounts[login];
+                                stream.chatterPercentage = stream.viewersCount > 0
+                                    ? (chatterCounts[login] / stream.viewersCount) * 100
+                                    : 0;
+                            } else {
+                                // Set to 0 for streams without login data
+                                stream.chatters = 0;
+                                stream.chatterPercentage = 0;
+                            }
+                        });
+                    }
+
+                    setStreams(allStreams);
+                    setError(null);
+                } catch (err) {
+                    console.error('Error fetching streams:', err);
+                    setError(`Failed to load streams: ${err.message}`);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const fetchChatterCounts = async (streamLogins) => {
+                const chatterCounts = {};
+                const batchSize = 20; // GraphQL supports up to 20 queries in one request
+
+                // Create all batches
+                const batches = [];
+                for (let i = 0; i < streamLogins.length; i += batchSize) {
+                    batches.push(streamLogins.slice(i, i + batchSize));
+                }
+
+                // Process all batches concurrently
+                const batchPromises = batches.map(async (batch) => {
+                    // Build batched query
+                    const queries = batch.map(login => ({
+                        operationName: "GetChannelChattersCount",
+                        query: "query GetChannelChattersCount($name: String!) { channel(name: $name) { chatters { count } } }",
+                        variables: { name: login }
+                    }));
+
+                    try {
+                        const response = await fetch('https://gql.twitch.tv/gql', {
+                            method: 'POST',
+                            headers: {
+                                'Client-Id': CLIENT_ID,
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(queries)
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const results = await response.json();
+
+                        // Parse results for this batch
+                        const batchResults = {};
+                        results.forEach((result, idx) => {
+                            if (idx < batch.length) {
+                                const login = batch[idx];
+                                try {
+                                    const channelData = result?.data?.channel;
+                                    if (channelData && channelData.chatters) {
+                                        batchResults[login] = channelData.chatters.count || 0;
+                                    } else {
+                                        batchResults[login] = 0;
+                                    }
+                                } catch {
+                                    batchResults[login] = 0;
+                                }
+                            }
+                        });
+                        return batchResults;
+                    } catch (err) {
+                        console.error('Error fetching chatter data for batch:', err);
+                        // If batch fails, set all to 0
+                        const batchResults = {};
+                        batch.forEach(login => {
+                            batchResults[login] = 0;
+                        });
+                        return batchResults;
+                    }
+                });
+
+                // Wait for all batches to complete
+                const allBatchResults = await Promise.all(batchPromises);
+
+                // Merge all results
+                allBatchResults.forEach(batchResult => {
+                    Object.assign(chatterCounts, batchResult);
+                });
+
+                return chatterCounts;
+            };
+
+
+
+            const updateCharts = () => {
+                // Destroy existing charts
+                Object.values(chartInstances.current).forEach(chart => {
+                    if (chart) chart.destroy();
+                });
+
+                // Games Distribution
+                if (chartRefs.gamesChart.current) {
+                    const ctx = chartRefs.gamesChart.current.getContext('2d');
+                    const gameStats = {};
+
+                    filteredStreams.forEach(s => {
+                        const gameName = s.game?.name || 'No Game';
+                        if (!gameStats[gameName]) {
+                            gameStats[gameName] = 0;
+                        }
+                        gameStats[gameName] += s.viewersCount || 0;
+                    });
+
+                    const sortedGames = Object.entries(gameStats)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 10);
+
+                    chartInstances.current.gamesChart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: sortedGames.map(g => g[0]),
+                            datasets: [{
+                                data: sortedGames.map(g => g[1]),
+                                backgroundColor: [
+                                    'rgba(255, 99, 132, 0.7)',
+                                    'rgba(54, 162, 235, 0.7)',
+                                    'rgba(255, 206, 86, 0.7)',
+                                    'rgba(75, 192, 192, 0.7)',
+                                    'rgba(153, 102, 255, 0.7)',
+                                    'rgba(255, 159, 64, 0.7)',
+                                    'rgba(199, 199, 199, 0.7)',
+                                    'rgba(83, 102, 255, 0.7)',
+                                    'rgba(255, 99, 255, 0.7)',
+                                    'rgba(99, 255, 132, 0.7)'
+                                ],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: {
+                                    display: false
+                                },
+                                legend: {
+                                    position: 'right',
+                                    align: 'center',
+                                    labels: {
+                                        boxWidth: 15,
+                                        padding: 10
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Chatter Percentage Distribution
+                if (chartRefs.chattersCountChart.current) {
+                    const ctx = chartRefs.chattersCountChart.current.getContext('2d');
+                    const percentageGroups = {
+                        '0-49%': { count: 0, color: '#fff3e0' },
+                        '50-69%': { count: 0, color: '#ffe0b2' },
+                        '70-79%': { count: 0, color: '#ffcc80' },
+                        '80-89%': { count: 0, color: '#ffb74d' },
+                        '90-99%': { count: 0, color: '#ffa726' },
+                        '100-119%': { count: 0, color: '#ff9800' },
+                        '120%+': { count: 0, color: '#fb8c00' }
+                    };
+
+                    filteredStreams.forEach(s => {
+                        const percentage = s.chatterPercentage || 0;
+                        if (percentage < 50) {
+                            percentageGroups['0-49%'].count++;
+                        } else if (percentage < 70) {
+                            percentageGroups['50-69%'].count++;
+                        } else if (percentage < 80) {
+                            percentageGroups['70-79%'].count++;
+                        } else if (percentage < 90) {
+                            percentageGroups['80-89%'].count++;
+                        } else if (percentage < 100) {
+                            percentageGroups['90-99%'].count++;
+                        } else if (percentage < 120) {
+                            percentageGroups['100-119%'].count++;
+                        } else {
+                            percentageGroups['120%+'].count++;
+                        }
+                    });
+
+                    chartInstances.current.chattersCountChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: Object.keys(percentageGroups),
+                            datasets: [{
+                                label: 'Streams',
+                                data: Object.values(percentageGroups).map(g => g.count),
+                                backgroundColor: Object.values(percentageGroups).map(g => g.color),
+                                borderColor: '#0a1929',
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: {
+                                    display: false
+                                },
+                                legend: {
+                                    display: false
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        stepSize: 1
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            };
+
+            const getChatterIndicator = (percentage) => {
+                if (percentage < 70) return { label: 'LOW', color: '#f44336' };
+                if (percentage < 90) return { label: 'MEDIUM', color: '#ff9800' };
+                if (percentage < 110) return { label: 'NORMAL', color: '#2196f3' };
+                return { label: 'HIGH', color: '#4caf50' };
+            };
+
+            // Paginated streams
+            const paginatedStreams = React.useMemo(() => {
+                const start = page * rowsPerPage;
+                const end = start + rowsPerPage;
+                return filteredStreams.slice(start, end);
+            }, [filteredStreams, page, rowsPerPage]);
+
+            const handleChangePage = (event, newPage) => {
+                setPage(newPage);
+            };
+
+            const handleChangeRowsPerPage = (event) => {
+                setRowsPerPage(parseInt(event.target.value, 10));
+                setPage(0);
+            };
+
+            const uniqueGames = React.useMemo(() => {
+                const games = new Set();
+                streams.forEach(s => {
+                    if (s.game?.name) games.add(s.game.name);
+                });
+                return Array.from(games).sort();
+            }, [streams]);
+
+            const stats = React.useMemo(() => {
+                const totalViewers = filteredStreams.reduce((sum, s) => sum + s.viewersCount, 0);
+                const avgViewers = filteredStreams.length > 0
+                    ? Math.round(totalViewers / filteredStreams.length)
+                    : 0;
+                const partners = filteredStreams.filter(s => s.broadcaster?.roles?.isPartner).length;
+
+                // Chatter stats
+                const streamsWithChatters = filteredStreams.filter(s => s.chatters !== undefined);
+                const totalChatters = streamsWithChatters.reduce((sum, s) => sum + (s.chatters || 0), 0);
+                const avgChatterPercentage = streamsWithChatters.length > 0
+                    ? streamsWithChatters.reduce((sum, s) => sum + (s.chatterPercentage || 0), 0) / streamsWithChatters.length
+                    : 0;
+
+                return {
+                    totalStreams: filteredStreams.length,
+                    totalViewers,
+                    avgViewers,
+                    partners,
+                    totalChatters,
+                    avgChatterPercentage
+                };
+            }, [filteredStreams]);
+
+            return (
+                <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+                    <AppBar position="static">
+                        <Toolbar>
+                            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+                                Twitch CV Analytics
+                            </Typography>
+                            <Button
+                                color="inherit"
+                                onClick={() => fetchStreams(100)}
+                                disabled={loading || scanCount === 100}
+                                sx={{ mr: 1 }}
+                            >
+                                Top 100
+                            </Button>
+                            <Button
+                                color="inherit"
+                                onClick={() => fetchStreams(1000)}
+                                disabled={loading || scanCount === 1000}
+                                sx={{ mr: 1 }}
+                            >
+                                Top 1000
+                            </Button>
+                            <Button
+                                color="inherit"
+                                onClick={() => fetchStreams(2000)}
+                                disabled={loading || scanCount === 2000}
+                                sx={{ mr: 1 }}
+                            >
+                                Top 2000
+                            </Button>
+                            <Button color="inherit" onClick={() => fetchStreams(scanCount)} disabled={loading}>
+                                {loading ? (
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <CircularProgress size={20} color="inherit" />
+                                        <Typography variant="body2">
+                                            {loadingProgress.current}/{loadingProgress.target}
+                                        </Typography>
+                                    </Box>
+                                ) : 'Refresh'}
+                            </Button>
+                        </Toolbar>
+                    </AppBar>
+
+                    <Container maxWidth={false} sx={{ mt: 2, mb: 2, py: 2 }}>
+                        {error && (
+                            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+                                {error}
+                            </Alert>
+                        )}
+
+                        {/* Stats Cards */}
+                        <Grid container spacing={2} sx={{ mb: 3 }}>
+                            <Grid item xs={12} sm={6} md={2.4}>
+                                <Card sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                                    <CardContent>
+                                        <Typography color="white" gutterBottom>
+                                            Total Streams
+                                        </Typography>
+                                        <Typography variant="h4" color="white">
+                                            {stats.totalStreams}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                            <Grid item xs={12} sm={6} md={2.4}>
+                                <Card sx={{ background: 'linear-gradient(135deg, #2196f3 0%, #1565c0 100%)' }}>
+                                    <CardContent>
+                                        <Typography color="white" gutterBottom>
+                                            Total Viewers
+                                        </Typography>
+                                        <Typography variant="h4" color="white">
+                                            {stats.totalViewers.toLocaleString()}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                            <Grid item xs={12} sm={6} md={2.4}>
+                                <Card sx={{ background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)' }}>
+                                    <CardContent>
+                                        <Typography color="white" gutterBottom>
+                                            Total Chatters
+                                        </Typography>
+                                        <Typography variant="h4" color="white">
+                                            {stats.totalChatters.toLocaleString()}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                            <Grid item xs={12} sm={6} md={2.4}>
+                                <Card sx={{ background: 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)' }}>
+                                    <CardContent>
+                                        <Typography color="white" gutterBottom>
+                                            Avg Engagement
+                                        </Typography>
+                                        <Typography variant="h4" color="white">
+                                            {stats.avgChatterPercentage.toFixed(0)}%
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                            <Grid item xs={12} sm={6} md={2.4}>
+                                <Card sx={{ background: 'linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%)' }}>
+                                    <CardContent>
+                                        <Typography color="white" gutterBottom>
+                                            Partner Channels
+                                        </Typography>
+                                        <Typography variant="h4" color="white">
+                                            {stats.partners}
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        </Grid>
+
+                        <Grid container spacing={3}>
+                            {/* Table */}
+                            <Grid item xs={12} lg={8}>
+                                {/* Filters */}
+                                <Paper sx={{ p: 2, mb: 3 }}>
+                                    <Grid container spacing={2} alignItems="center">
+                                        <Grid item xs={12} sm={6}>
+                                            <TextField
+                                                fullWidth
+                                                label="Search"
+                                                variant="outlined"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                placeholder="Search title, streamer, or game..."
+                                            />
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                            <FormControl fullWidth>
+                                                <InputLabel>Filter by Game</InputLabel>
+                                                <Select
+                                                    value={gameFilter}
+                                                    label="Filter by Game"
+                                                    onChange={(e) => setGameFilter(e.target.value)}
+                                                >
+                                                    <MenuItem value="all">All Games</MenuItem>
+                                                    {uniqueGames.map(game => (
+                                                        <MenuItem key={game} value={game}>{game}</MenuItem>
+                                                    ))}
+                                                </Select>
+                                            </FormControl>
+                                        </Grid>
+                                        <Grid item xs={12}>
+                                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                                                <Typography variant="body2" sx={{ mr: 1, color: 'text.secondary' }}>
+                                                    C/V Type:
+                                                </Typography>
+                                                <Button
+                                                    variant={cvFilter === 'all' ? 'contained' : 'outlined'}
+                                                    size="small"
+                                                    onClick={() => setCvFilter('all')}
+                                                >
+                                                    All
+                                                </Button>
+                                                <Button
+                                                    variant={cvFilter === 'LOW' ? 'contained' : 'outlined'}
+                                                    size="small"
+                                                    onClick={() => setCvFilter('LOW')}
+                                                    sx={{
+                                                        borderColor: cvFilter === 'LOW' ? undefined : '#f44336',
+                                                        color: cvFilter === 'LOW' ? undefined : '#f44336',
+                                                        '&:hover': { borderColor: '#f44336', backgroundColor: 'rgba(244, 67, 54, 0.08)' }
+                                                    }}
+                                                >
+                                                    Low (&lt;70%)
+                                                </Button>
+                                                <Button
+                                                    variant={cvFilter === 'MEDIUM' ? 'contained' : 'outlined'}
+                                                    size="small"
+                                                    onClick={() => setCvFilter('MEDIUM')}
+                                                    sx={{
+                                                        borderColor: cvFilter === 'MEDIUM' ? undefined : '#ff9800',
+                                                        color: cvFilter === 'MEDIUM' ? undefined : '#ff9800',
+                                                        '&:hover': { borderColor: '#ff9800', backgroundColor: 'rgba(255, 152, 0, 0.08)' }
+                                                    }}
+                                                >
+                                                    Medium (70-89%)
+                                                </Button>
+                                                <Button
+                                                    variant={cvFilter === 'NORMAL' ? 'contained' : 'outlined'}
+                                                    size="small"
+                                                    onClick={() => setCvFilter('NORMAL')}
+                                                    sx={{
+                                                        borderColor: cvFilter === 'NORMAL' ? undefined : '#4caf50',
+                                                        color: cvFilter === 'NORMAL' ? undefined : '#4caf50',
+                                                        '&:hover': { borderColor: '#4caf50', backgroundColor: 'rgba(76, 175, 80, 0.08)' }
+                                                    }}
+                                                >
+                                                    Normal (90-109%)
+                                                </Button>
+                                                <Button
+                                                    variant={cvFilter === 'HIGH' ? 'contained' : 'outlined'}
+                                                    size="small"
+                                                    onClick={() => setCvFilter('HIGH')}
+                                                    sx={{
+                                                        borderColor: cvFilter === 'HIGH' ? undefined : '#2196f3',
+                                                        color: cvFilter === 'HIGH' ? undefined : '#2196f3',
+                                                        '&:hover': { borderColor: '#2196f3', backgroundColor: 'rgba(33, 150, 243, 0.08)' }
+                                                    }}
+                                                >
+                                                    High (≥110%)
+                                                </Button>
+                                            </Box>
+                                        </Grid>
+                                    </Grid>
+                                </Paper>
+
+                                <Paper sx={{ width: '100%' }}>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderBottom: '1px solid #1e3a5f' }}>
+                                        <Typography variant="body2" color="textSecondary">
+                                            Showing {page * rowsPerPage + 1}-{Math.min((page + 1) * rowsPerPage, filteredStreams.length)} of {filteredStreams.length}
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <FormControl size="small">
+                                                <Select
+                                                    value={rowsPerPage}
+                                                    onChange={handleChangeRowsPerPage}
+                                                    variant="outlined"
+                                                >
+                                                    <MenuItem value={25}>25 rows</MenuItem>
+                                                    <MenuItem value={50}>50 rows</MenuItem>
+                                                    <MenuItem value={100}>100 rows</MenuItem>
+                                                    <MenuItem value={250}>250 rows</MenuItem>
+                                                </Select>
+                                            </FormControl>
+                                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                                <Button
+                                                    size="small"
+                                                    onClick={(e) => handleChangePage(e, page - 1)}
+                                                    disabled={page === 0}
+                                                    variant="outlined"
+                                                >
+                                                    Previous
+                                                </Button>
+                                                <Button
+                                                    size="small"
+                                                    onClick={(e) => handleChangePage(e, page + 1)}
+                                                    disabled={(page + 1) * rowsPerPage >= filteredStreams.length}
+                                                    variant="outlined"
+                                                >
+                                                    Next
+                                                </Button>
+                                            </Box>
+                                        </Box>
+                                    </Box>
+                                    <TableContainer>
+                                        <Table>
+                                            <TableHead>
+                                                <TableRow>
+                                                    <TableCell>Preview</TableCell>
+                                                    <TableCell>
+                                                        <TableSortLabel
+                                                            active={orderBy === 'broadcaster'}
+                                                            direction={orderBy === 'broadcaster' ? order : 'asc'}
+                                                            onClick={() => handleSort('broadcaster')}
+                                                        >
+                                                            Streamer
+                                                        </TableSortLabel>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <TableSortLabel
+                                                            active={orderBy === 'title'}
+                                                            direction={orderBy === 'title' ? order : 'asc'}
+                                                            onClick={() => handleSort('title')}
+                                                        >
+                                                            Title
+                                                        </TableSortLabel>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <TableSortLabel
+                                                            active={orderBy === 'game'}
+                                                            direction={orderBy === 'game' ? order : 'asc'}
+                                                            onClick={() => handleSort('game')}
+                                                        >
+                                                            Game
+                                                        </TableSortLabel>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <TableSortLabel
+                                                            active={orderBy === 'viewersCount'}
+                                                            direction={orderBy === 'viewersCount' ? order : 'asc'}
+                                                            onClick={() => handleSort('viewersCount')}
+                                                        >
+                                                            Viewers
+                                                        </TableSortLabel>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <TableSortLabel
+                                                            active={orderBy === 'chatters'}
+                                                            direction={orderBy === 'chatters' ? order : 'asc'}
+                                                            onClick={() => handleSort('chatters')}
+                                                        >
+                                                            Chatters
+                                                        </TableSortLabel>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <TableSortLabel
+                                                            active={orderBy === 'chatterPercentage'}
+                                                            direction={orderBy === 'chatterPercentage' ? order : 'asc'}
+                                                            onClick={() => handleSort('chatterPercentage')}
+                                                        >
+                                                            C/V%
+                                                        </TableSortLabel>
+                                                    </TableCell>
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {paginatedStreams.map((stream) => (
+                                                    <TableRow key={stream.id} hover>
+                                                        <TableCell>
+                                                            {stream.previewImageURL ? (
+                                                                <img
+                                                                    src={stream.previewImageURL}
+                                                                    alt="Preview"
+                                                                    className="stream-preview"
+                                                                />
+                                                            ) : (
+                                                                <Box sx={{ width: 80, height: 45, bgcolor: 'grey.300', borderRadius: 1 }} />
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Box
+                                                                component="a"
+                                                                href={`https://www.twitch.tv/${stream.broadcaster?.login || ''}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                sx={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: 1,
+                                                                    textDecoration: 'none',
+                                                                    color: 'inherit',
+                                                                    cursor: 'pointer',
+                                                                    '&:hover': {
+                                                                        opacity: 0.8
+                                                                    }
+                                                                }}
+                                                            >
+                                                                {stream.broadcaster?.profileImageURL ? (
+                                                                    <img
+                                                                        src={stream.broadcaster.profileImageURL}
+                                                                        alt={stream.broadcaster.displayName}
+                                                                        className="stream-avatar"
+                                                                    />
+                                                                ) : (
+                                                                    <Box sx={{ width: 40, height: 40, bgcolor: 'grey.300', borderRadius: '50%' }} />
+                                                                )}
+                                                                <Box>
+                                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                                        <Typography variant="body2" fontWeight="bold">
+                                                                            {stream.broadcaster?.displayName || 'Unknown'}
+                                                                        </Typography>
+                                                                        {stream.broadcaster?.roles?.isPartner && (
+                                                                            <Box
+                                                                                sx={{
+                                                                                    width: 16,
+                                                                                    height: 16,
+                                                                                    borderRadius: '50%',
+                                                                                    bgcolor: '#9146ff',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    justifyContent: 'center',
+                                                                                    fontSize: '10px',
+                                                                                    color: 'white',
+                                                                                    fontWeight: 'bold'
+                                                                                }}
+                                                                                title="Twitch Partner"
+                                                                            >
+                                                                                ✓
+                                                                            </Box>
+                                                                        )}
+                                                                    </Box>
+                                                                </Box>
+                                                            </Box>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Typography variant="body2" noWrap sx={{ maxWidth: 250 }}>
+                                                                {stream.title || 'No title'}
+                                                            </Typography>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {stream.game?.displayName || 'No game'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Typography variant="body1" fontWeight="bold" color="primary">
+                                                                {stream.viewersCount.toLocaleString()}
+                                                            </Typography>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {stream.chatters !== undefined ? (
+                                                                <Typography variant="body1" fontWeight="bold">
+                                                                    {stream.chatters.toLocaleString()}
+                                                                </Typography>
+                                                            ) : (
+                                                                <Typography variant="body2" color="textSecondary">
+                                                                    Loading...
+                                                                </Typography>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {stream.chatterPercentage !== undefined ? (
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                                                                    <Typography variant="body1" fontWeight="bold">
+                                                                        {stream.chatterPercentage.toFixed(0)}%
+                                                                    </Typography>
+                                                                    <Chip
+                                                                        label={getChatterIndicator(stream.chatterPercentage).label}
+                                                                        size="small"
+                                                                        sx={{
+                                                                            bgcolor: getChatterIndicator(stream.chatterPercentage).color,
+                                                                            color: 'white',
+                                                                            fontWeight: 'bold'
+                                                                        }}
+                                                                    />
+                                                                </Box>
+                                                            ) : (
+                                                                <Typography variant="body2" color="textSecondary">
+                                                                    -
+                                                                </Typography>
+                                                            )}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </TableContainer>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderTop: '1px solid #1e3a5f' }}>
+                                        <Typography variant="body2" color="textSecondary">
+                                            Showing {page * rowsPerPage + 1}-{Math.min((page + 1) * rowsPerPage, filteredStreams.length)} of {filteredStreams.length}
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <FormControl size="small">
+                                                <Select
+                                                    value={rowsPerPage}
+                                                    onChange={handleChangeRowsPerPage}
+                                                    variant="outlined"
+                                                >
+                                                    <MenuItem value={25}>25 rows</MenuItem>
+                                                    <MenuItem value={50}>50 rows</MenuItem>
+                                                    <MenuItem value={100}>100 rows</MenuItem>
+                                                    <MenuItem value={250}>250 rows</MenuItem>
+                                                </Select>
+                                            </FormControl>
+                                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                                <Button
+                                                    size="small"
+                                                    onClick={(e) => handleChangePage(e, page - 1)}
+                                                    disabled={page === 0}
+                                                    variant="outlined"
+                                                >
+                                                    Previous
+                                                </Button>
+                                                <Button
+                                                    size="small"
+                                                    onClick={(e) => handleChangePage(e, page + 1)}
+                                                    disabled={(page + 1) * rowsPerPage >= filteredStreams.length}
+                                                    variant="outlined"
+                                                >
+                                                    Next
+                                                </Button>
+                                            </Box>
+                                        </Box>
+                                    </Box>
+                                </Paper>
+                            </Grid>
+
+                            {/* Charts */}
+                            <Grid item xs={12} lg={4}>
+                                <Paper sx={{ p: 2, mb: 2 }}>
+                                    <Typography variant="h6" sx={{ mb: 2 }}>
+                                        C/V Distribution
+                                    </Typography>
+                                    <div className="chart-container" style={{ height: '300px' }}>
+                                        <canvas ref={chartRefs.chattersCountChart}></canvas>
+                                    </div>
+                                </Paper>
+
+                                <Paper sx={{ p: 2, mt: 2 }}>
+                                    <Typography variant="h6" sx={{ mb: 2 }}>
+                                        Top 10 Games by Viewers
+                                    </Typography>
+                                    <div className="chart-container" style={{ height: '350px' }}>
+                                        <canvas ref={chartRefs.gamesChart}></canvas>
+                                    </div>
+                                </Paper>
+                            </Grid>
+                        </Grid>
+                    </Container>
+                </Box>
+            );
+        };
+
+        // Render the app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(
+            <ThemeProvider theme={darkTheme}>
+                <StreamAnalytics />
+            </ThemeProvider>
+        );
+    </script>
+</body>
+
+</html>
