@@ -695,8 +695,8 @@
                 // Chatter stats
                 const streamsWithChatters = filteredStreams.filter(s => s.chatters !== undefined);
                 const totalChatters = streamsWithChatters.reduce((sum, s) => sum + (s.chatters || 0), 0);
-                const avgChatterPercentage = streamsWithChatters.length > 0
-                    ? streamsWithChatters.reduce((sum, s) => sum + (s.chatterPercentage || 0), 0) / streamsWithChatters.length
+                const avgChatterPercentage = totalViewers > 0
+                    ? (totalChatters / totalViewers) * 100
                     : 0;
 
                 return {
