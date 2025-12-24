@@ -192,6 +192,8 @@
             const [rowsPerPage, setRowsPerPage] = React.useState(50);
             const [scanCount, setScanCount] = React.useState(100);
             const [loadingProgress, setLoadingProgress] = React.useState({ current: 0, target: 0 });
+            const [confirmDialog, setConfirmDialog] = React.useState({ open: false, count: 0 });
+            const [warningShown, setWarningShown] = React.useState({ 1000: false, 2000: false });
 
             const chartRefs = {
                 gamesChart: React.useRef(null),
@@ -200,6 +202,26 @@
 
             const chartInstances = React.useRef({});
 
+            // Handle button clicks with confirmation
+            const handleFetchClick = (count) => {
+                if ((count === 1000 || count === 2000) && !warningShown[count]) {
+                    setConfirmDialog({ open: true, count });
+                } else {
+                    fetchStreams(count);
+                }
+            };
+
+            const handleConfirmFetch = () => {
+                const count = confirmDialog.count;
+                setWarningShown(prev => ({ ...prev, [count]: true }));
+                setConfirmDialog({ open: false, count: 0 });
+                fetchStreams(count);
+            };
+
+            const handleCancelFetch = () => {
+                setConfirmDialog({ open: false, count: 0 });
+            };
+
             // Handle sort
             const handleSort = (column) => {
                 const isAsc = orderBy === column && order === 'asc';
@@ -207,11 +229,6 @@
                 setOrderBy(column);
                 setPage(0); // Reset to first page on sort
             };
-
-            // Load data on mount - fetch first 100 streams
-            React.useEffect(() => {
-                fetchStreams(100);
-            }, []);
 
             // Update filtered streams when filters change
             React.useEffect(() => {
@@ -738,24 +755,24 @@
                             </Typography>
                             <Button
                                 color="inherit"
-                                onClick={() => fetchStreams(100)}
-                                disabled={loading || scanCount === 100}
+                                onClick={() => handleFetchClick(100)}
+                                disabled={loading || (streams.length > 0 && scanCount === 100)}
                                 sx={{ mr: 1 }}
                             >
                                 Top 100
                             </Button>
                             <Button
                                 color="inherit"
-                                onClick={() => fetchStreams(1000)}
-                                disabled={loading || scanCount === 1000}
+                                onClick={() => handleFetchClick(1000)}
+                                disabled={loading || (streams.length > 0 && scanCount === 1000)}
                                 sx={{ mr: 1 }}
                             >
                                 Top 1000
                             </Button>
                             <Button
                                 color="inherit"
-                                onClick={() => fetchStreams(2000)}
-                                disabled={loading || scanCount === 2000}
+                                onClick={() => handleFetchClick(2000)}
+                                disabled={loading || (streams.length > 0 && scanCount === 2000)}
                                 sx={{ mr: 1 }}
                             >
                                 Top 2000
@@ -777,6 +794,18 @@
                         {error && (
                             <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
                                 {error}
+                            </Alert>
+                        )}
+
+                        {/* Welcome message when no data is loaded */}
+                        {!loading && streams.length === 0 && (
+                            <Alert severity="info" sx={{ mb: 3 }}>
+                                <Typography variant="h6" gutterBottom>
+                                    Welcome to Twitch CV Analytics!
+                                </Typography>
+                                <Typography variant="body1">
+                                    Click one of the buttons above (Top 100, Top 1000, or Top 2000) to begin retrieving and analyzing Twitch stream data.
+                                </Typography>
                             </Alert>
                         )}
 
@@ -1210,6 +1239,31 @@
                             </Grid>
                         </Grid>
                     </Container>
+
+                    {/* Confirmation Dialog */}
+                    <Dialog open={confirmDialog.open} onClose={handleCancelFetch}>
+                        <DialogTitle>
+                            Fetch Top {confirmDialog.count} Streams?
+                        </DialogTitle>
+                        <DialogContent>
+                            <Alert severity="warning" sx={{ mb: 2 }}>
+                                <Typography variant="body1">
+                                    This will take longer than fetching the top 100.
+                                </Typography>
+                            </Alert>
+                            <Typography variant="body2">
+                                Do you wish to proceed?
+                            </Typography>
+                        </DialogContent>
+                        <DialogActions>
+                            <Button onClick={handleCancelFetch} color="inherit">
+                                Cancel
+                            </Button>
+                            <Button onClick={handleConfirmFetch} variant="contained" color="primary" autoFocus>
+                                Yes, Proceed
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
                 </Box>
             );
         };
