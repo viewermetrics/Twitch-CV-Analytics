@@ -194,6 +194,7 @@
             const [loadingProgress, setLoadingProgress] = React.useState({ current: 0, target: 0 });
             const [confirmDialog, setConfirmDialog] = React.useState({ open: false, count: 0 });
             const [warningShown, setWarningShown] = React.useState({ 1000: false, 2000: false });
+            const [streamDetailsModal, setStreamDetailsModal] = React.useState({ open: false, stream: null });
 
             const chartRefs = {
                 gamesChart: React.useRef(null),
@@ -1078,16 +1079,11 @@
                                                     <TableRow key={stream.id} hover>
                                                         <TableCell>
                                                             <Box
-                                                                component="a"
-                                                                href={`https://www.twitch.tv/${stream.broadcaster?.login || ''}`}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
+                                                                onClick={() => setStreamDetailsModal({ open: true, stream })}
                                                                 sx={{
                                                                     display: 'flex',
                                                                     alignItems: 'center',
                                                                     gap: 1,
-                                                                    textDecoration: 'none',
-                                                                    color: 'inherit',
                                                                     cursor: 'pointer',
                                                                     '&:hover': {
                                                                         opacity: 0.8
@@ -1263,6 +1259,261 @@
                                 Yes, Proceed
                             </Button>
                         </DialogActions>
+                    </Dialog>
+
+                    {/* Stream Details Modal */}
+                    <Dialog
+                        open={streamDetailsModal.open}
+                        onClose={() => setStreamDetailsModal({ open: false, stream: null })}
+                        maxWidth="md"
+                        fullWidth
+                    >
+                        {streamDetailsModal.stream && (
+                            <>
+                                <DialogTitle>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        {streamDetailsModal.stream.broadcaster?.profileImageURL && (
+                                            <img
+                                                src={streamDetailsModal.stream.broadcaster.profileImageURL}
+                                                alt={streamDetailsModal.stream.broadcaster.displayName}
+                                                style={{ width: 60, height: 60, borderRadius: '50%' }}
+                                            />
+                                        )}
+                                        <Box>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                {streamDetailsModal.stream.broadcaster?.roles?.isPartner && (
+                                                    <Box
+                                                        sx={{
+                                                            width: 20,
+                                                            height: 20,
+                                                            borderRadius: '50%',
+                                                            bgcolor: '#9146ff',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontSize: '12px',
+                                                            color: 'white',
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                        title="Twitch Partner"
+                                                    >
+                                                        ✓
+                                                    </Box>
+                                                )}
+                                                <Typography variant="h5" fontWeight="bold">
+                                                    {streamDetailsModal.stream.broadcaster?.displayName || 'Unknown'}
+                                                </Typography>
+                                            </Box>
+                                            <Typography variant="body2" color="text.secondary">
+                                                @{streamDetailsModal.stream.broadcaster?.login || 'unknown'}
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                </DialogTitle>
+                                <DialogContent dividers>
+                                    <Grid container spacing={3}>
+                                        {/* Stream Preview */}
+                                        {streamDetailsModal.stream.previewImageURL && (
+                                            <Grid item xs={12}>
+                                                <img
+                                                    src={streamDetailsModal.stream.previewImageURL}
+                                                    alt="Stream preview"
+                                                    style={{ width: '100%', maxWidth: 440, borderRadius: 8, display: 'block', margin: '0 auto' }}
+                                                />
+                                            </Grid>
+                                        )}
+
+                                        {/* Stream Title */}
+                                        <Grid item xs={12}>
+                                            <Typography variant="h6" gutterBottom>
+                                                Stream Title
+                                            </Typography>
+                                            <Typography variant="body1">
+                                                {streamDetailsModal.stream.title || 'No title'}
+                                            </Typography>
+                                        </Grid>
+
+                                        {/* Stats Grid */}
+                                        <Grid item xs={12}>
+                                            <Typography variant="h6" gutterBottom>
+                                                Statistics
+                                            </Typography>
+                                            <Grid container spacing={2}>
+                                                <Grid item xs={6} sm={3}>
+                                                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Viewers
+                                                        </Typography>
+                                                        <Typography variant="h5" color="primary" fontWeight="bold">
+                                                            {streamDetailsModal.stream.viewersCount?.toLocaleString() || 0}
+                                                        </Typography>
+                                                    </Paper>
+                                                </Grid>
+                                                <Grid item xs={6} sm={3}>
+                                                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Chatters
+                                                        </Typography>
+                                                        <Typography variant="h5" fontWeight="bold">
+                                                            {streamDetailsModal.stream.chatters?.toLocaleString() || 0}
+                                                        </Typography>
+                                                    </Paper>
+                                                </Grid>
+                                                <Grid item xs={6} sm={3}>
+                                                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            C/V Ratio
+                                                        </Typography>
+                                                        <Typography variant="h5" fontWeight="bold">
+                                                            {streamDetailsModal.stream.chatterPercentage?.toFixed(0) || 0}%
+                                                        </Typography>
+                                                    </Paper>
+                                                </Grid>
+                                                <Grid item xs={6} sm={3}>
+                                                    <Paper sx={{ p: 2, textAlign: 'center' }}>
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Status
+                                                        </Typography>
+                                                        <Chip
+                                                            label={getChatterIndicator(streamDetailsModal.stream.chatterPercentage || 0).label}
+                                                            sx={{
+                                                                bgcolor: getChatterIndicator(streamDetailsModal.stream.chatterPercentage || 0).color,
+                                                                color: 'white',
+                                                                fontWeight: 'bold',
+                                                                mt: 1
+                                                            }}
+                                                        />
+                                                    </Paper>
+                                                </Grid>
+                                            </Grid>
+                                        </Grid>
+
+                                        {/* Game Info */}
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="h6" gutterBottom>
+                                                Game
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                {streamDetailsModal.stream.game?.boxArtURL && (
+                                                    <img
+                                                        src={streamDetailsModal.stream.game.boxArtURL}
+                                                        alt={streamDetailsModal.stream.game.name}
+                                                        style={{ width: 40, height: 56, borderRadius: 4 }}
+                                                    />
+                                                )}
+                                                <Typography variant="body1">
+                                                    {streamDetailsModal.stream.game?.displayName || 'No game'}
+                                                </Typography>
+                                            </Box>
+                                        </Grid>
+
+                                        {/* Language */}
+                                        <Grid item xs={12} sm={6}>
+                                            <Typography variant="h6" gutterBottom>
+                                                Language
+                                            </Typography>
+                                            <Typography variant="body1">
+                                                {streamDetailsModal.stream.language?.toUpperCase() || 'Unknown'}
+                                            </Typography>
+                                        </Grid>
+
+                                        {/* Tags */}
+                                        {streamDetailsModal.stream.freeformTags && streamDetailsModal.stream.freeformTags.length > 0 && (
+                                            <Grid item xs={12}>
+                                                <Typography variant="h6" gutterBottom>
+                                                    Tags
+                                                </Typography>
+                                                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                                    {streamDetailsModal.stream.freeformTags.map(tag => (
+                                                        <Chip key={tag.id} label={tag.name} size="small" />
+                                                    ))}
+                                                </Box>
+                                            </Grid>
+                                        )}
+
+                                        {/* External Links */}
+                                        <Grid item xs={12}>
+                                            <Typography variant="h6" gutterBottom>
+                                                View on External Sites
+                                            </Typography>
+                                            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                                                <Button
+                                                    variant="contained"
+                                                    component="a"
+                                                    href={`https://www.twitch.tv/${streamDetailsModal.stream.broadcaster?.login || ''}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    startIcon={
+                                                        <Box
+                                                            component="svg"
+                                                            viewBox="0 0 24 24"
+                                                            sx={{ width: 20, height: 20, fill: 'currentColor' }}
+                                                        >
+                                                            <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z" />
+                                                        </Box>
+                                                    }
+                                                    sx={{
+                                                        bgcolor: '#9146ff',
+                                                        '&:hover': { bgcolor: '#7d3acc' }
+                                                    }}
+                                                >
+                                                    Twitch
+                                                </Button>
+                                                <Button
+                                                    variant="contained"
+                                                    component="a"
+                                                    href={`https://twitchtracker.com/${streamDetailsModal.stream.broadcaster?.login || ''}/streams/${streamDetailsModal.stream.id || ''}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    startIcon={
+                                                        <Box
+                                                            component="svg"
+                                                            viewBox="0 0 24 24"
+                                                            sx={{ width: 20, height: 20, fill: 'currentColor' }}
+                                                        >
+                                                            <path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" />
+                                                        </Box>
+                                                    }
+                                                    sx={{
+                                                        bgcolor: '#ff6b6b',
+                                                        '&:hover': { bgcolor: '#ff5252' }
+                                                    }}
+                                                >
+                                                    TwitchTracker
+                                                </Button>
+                                                <Button
+                                                    variant="contained"
+                                                    component="a"
+                                                    href={`https://streamscharts.com/channels/${streamDetailsModal.stream.broadcaster?.login || ''}/streams/${streamDetailsModal.stream.id || ''}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    startIcon={
+                                                        <Box
+                                                            component="svg"
+                                                            viewBox="0 0 24 24"
+                                                            sx={{ width: 20, height: 20, fill: 'currentColor' }}
+                                                        >
+                                                            <path d="M3 3v18h18V3H3zm16 16H5V5h14v14zM7 17h2v-6H7v6zm4 0h2V7h-2v10zm4 0h2v-4h-2v4z" />
+                                                        </Box>
+                                                    }
+                                                    sx={{
+                                                        bgcolor: '#00bcd4',
+                                                        '&:hover': { bgcolor: '#00acc1' }
+                                                    }}
+                                                >
+                                                    StreamsCharts
+                                                </Button>
+                                            </Box>
+                                        </Grid>
+                                    </Grid>
+                                </DialogContent>
+                                <DialogActions>
+                                    <Button onClick={() => setStreamDetailsModal({ open: false, stream: null })}>
+                                        Close
+                                    </Button>
+                                </DialogActions>
+                            </>
+                        )}
                     </Dialog>
                 </Box>
             );
