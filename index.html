@@ -1046,106 +1046,104 @@
                                             </TableHead>
                                             <TableBody>
                                                 {paginatedStreams.map((stream) => (
-                                                    <Tooltip title={stream.title || 'No title'} placement="top" arrow>
-                                                        <TableRow key={stream.id} hover>
-                                                            <TableCell>
-                                                                <Box
-                                                                    component="a"
-                                                                    href={`https://www.twitch.tv/${stream.broadcaster?.login || ''}`}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    sx={{
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        gap: 1,
-                                                                        textDecoration: 'none',
-                                                                        color: 'inherit',
-                                                                        cursor: 'pointer',
-                                                                        '&:hover': {
-                                                                            opacity: 0.8
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    {stream.broadcaster?.profileImageURL ? (
-                                                                        <img
-                                                                            src={stream.broadcaster.profileImageURL}
-                                                                            alt={stream.broadcaster.displayName}
-                                                                            className="stream-avatar"
-                                                                        />
-                                                                    ) : (
-                                                                        <Box sx={{ width: 40, height: 40, bgcolor: 'grey.300', borderRadius: '50%' }} />
-                                                                    )}
-                                                                    <Box>
-                                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                                                            {stream.broadcaster?.roles?.isPartner && (
-                                                                                <Box
-                                                                                    sx={{
-                                                                                        width: 16,
-                                                                                        height: 16,
-                                                                                        borderRadius: '50%',
-                                                                                        bgcolor: '#9146ff',
-                                                                                        display: 'flex',
-                                                                                        alignItems: 'center',
-                                                                                        justifyContent: 'center',
-                                                                                        fontSize: '10px',
-                                                                                        color: 'white',
-                                                                                        fontWeight: 'bold'
-                                                                                    }}
-                                                                                    title="Twitch Partner"
-                                                                                >
-                                                                                    ✓
-                                                                                </Box>
-                                                                            )}
-                                                                            <Typography fontWeight="bold">
-                                                                                {stream.broadcaster?.displayName || 'Unknown'}
-                                                                            </Typography>
-                                                                        </Box>
+                                                    <TableRow key={stream.id} hover>
+                                                        <TableCell>
+                                                            <Box
+                                                                component="a"
+                                                                href={`https://www.twitch.tv/${stream.broadcaster?.login || ''}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                sx={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: 1,
+                                                                    textDecoration: 'none',
+                                                                    color: 'inherit',
+                                                                    cursor: 'pointer',
+                                                                    '&:hover': {
+                                                                        opacity: 0.8
+                                                                    }
+                                                                }}
+                                                            >
+                                                                {stream.broadcaster?.profileImageURL ? (
+                                                                    <img
+                                                                        src={stream.broadcaster.profileImageURL}
+                                                                        alt={stream.broadcaster.displayName}
+                                                                        className="stream-avatar"
+                                                                    />
+                                                                ) : (
+                                                                    <Box sx={{ width: 40, height: 40, bgcolor: 'grey.300', borderRadius: '50%' }} />
+                                                                )}
+                                                                <Box>
+                                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                                        {stream.broadcaster?.roles?.isPartner && (
+                                                                            <Box
+                                                                                sx={{
+                                                                                    width: 16,
+                                                                                    height: 16,
+                                                                                    borderRadius: '50%',
+                                                                                    bgcolor: '#9146ff',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    justifyContent: 'center',
+                                                                                    fontSize: '10px',
+                                                                                    color: 'white',
+                                                                                    fontWeight: 'bold'
+                                                                                }}
+                                                                                title="Twitch Partner"
+                                                                            >
+                                                                                ✓
+                                                                            </Box>
+                                                                        )}
+                                                                        <Typography fontWeight="bold">
+                                                                            {stream.broadcaster?.displayName || 'Unknown'}
+                                                                        </Typography>
                                                                     </Box>
                                                                 </Box>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                {stream.game?.displayName || 'No game'}
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <Typography variant="body1" fontWeight="bold" color="primary">
-                                                                    {stream.viewersCount.toLocaleString()}
+                                                            </Box>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {stream.game?.displayName || 'No game'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Typography variant="body1" fontWeight="bold" color="primary">
+                                                                {stream.viewersCount.toLocaleString()}
+                                                            </Typography>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {stream.chatters !== undefined ? (
+                                                                <Typography variant="body1" fontWeight="bold">
+                                                                    {stream.chatters.toLocaleString()}
                                                                 </Typography>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                {stream.chatters !== undefined ? (
+                                                            ) : (
+                                                                <Typography variant="body2" color="textSecondary">
+                                                                    Loading...
+                                                                </Typography>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {stream.chatterPercentage !== undefined ? (
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                                                                     <Typography variant="body1" fontWeight="bold">
-                                                                        {stream.chatters.toLocaleString()}
+                                                                        {stream.chatterPercentage.toFixed(0)}%
                                                                     </Typography>
-                                                                ) : (
-                                                                    <Typography variant="body2" color="textSecondary">
-                                                                        Loading...
-                                                                    </Typography>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                {stream.chatterPercentage !== undefined ? (
-                                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                                                                        <Typography variant="body1" fontWeight="bold">
-                                                                            {stream.chatterPercentage.toFixed(0)}%
-                                                                        </Typography>
-                                                                        <Chip
-                                                                            label={getChatterIndicator(stream.chatterPercentage).label}
-                                                                            size="small"
-                                                                            sx={{
-                                                                                bgcolor: getChatterIndicator(stream.chatterPercentage).color,
-                                                                                color: 'white',
-                                                                                fontWeight: 'bold'
-                                                                            }}
-                                                                        />
-                                                                    </Box>
-                                                                ) : (
-                                                                    <Typography variant="body2" color="textSecondary">
-                                                                        -
-                                                                    </Typography>
-                                                                )}
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    </Tooltip>
+                                                                    <Chip
+                                                                        label={getChatterIndicator(stream.chatterPercentage).label}
+                                                                        size="small"
+                                                                        sx={{
+                                                                            bgcolor: getChatterIndicator(stream.chatterPercentage).color,
+                                                                            color: 'white',
+                                                                            fontWeight: 'bold'
+                                                                        }}
+                                                                    />
+                                                                </Box>
+                                                            ) : (
+                                                                <Typography variant="body2" color="textSecondary">
+                                                                    -
+                                                                </Typography>
+                                                            )}
+                                                        </TableCell>
+                                                    </TableRow>
                                                 ))}
                                             </TableBody>
                                         </Table>
