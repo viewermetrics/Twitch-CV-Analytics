@@ -193,7 +193,7 @@
             const [scanCount, setScanCount] = React.useState(100);
             const [loadingProgress, setLoadingProgress] = React.useState({ current: 0, target: 0 });
             const [confirmDialog, setConfirmDialog] = React.useState({ open: false, count: 0 });
-            const [warningShown, setWarningShown] = React.useState({ 1000: false, 2000: false });
+            const [warningShown, setWarningShown] = React.useState({ 500: false, 1000: false, 2000: false });
             const [streamDetailsModal, setStreamDetailsModal] = React.useState({ open: false, stream: null });
 
             const chartRefs = {
@@ -206,7 +206,7 @@
 
             // Handle button clicks with confirmation
             const handleFetchClick = (count) => {
-                if ((count === 1000 || count === 2000) && !warningShown[count]) {
+                if ((count === 500 || count === 1000 || count === 2000) && !warningShown[count]) {
                     setConfirmDialog({ open: true, count });
                 } else {
                     fetchStreams(count);
@@ -770,6 +770,21 @@
                 return { label: 'HIGH', color: '#4caf50' };
             };
 
+            const getLanguageName = (code) => {
+                const languageMap = {
+                    'en': 'English', 'es': 'Spanish', 'pt': 'Portuguese', 'de': 'German',
+                    'fr': 'French', 'it': 'Italian', 'ru': 'Russian', 'ja': 'Japanese',
+                    'ko': 'Korean', 'zh': 'Chinese', 'tr': 'Turkish', 'pl': 'Polish',
+                    'nl': 'Dutch', 'sv': 'Swedish', 'no': 'Norwegian', 'da': 'Danish',
+                    'fi': 'Finnish', 'cs': 'Czech', 'sk': 'Slovak', 'hu': 'Hungarian',
+                    'ro': 'Romanian', 'bg': 'Bulgarian', 'el': 'Greek', 'ar': 'Arabic',
+                    'th': 'Thai', 'vi': 'Vietnamese', 'id': 'Indonesian', 'ms': 'Malay',
+                    'tl': 'Tagalog', 'hi': 'Hindi', 'bn': 'Bengali', 'uk': 'Ukrainian',
+                    'he': 'Hebrew', 'other': 'Other'
+                };
+                return languageMap[code?.toLowerCase()] || code?.toUpperCase() || 'Unknown';
+            };
+
             // Paginated streams
             const paginatedStreams = React.useMemo(() => {
                 const start = page * rowsPerPage;
@@ -840,6 +855,14 @@
                                 sx={{ mr: 1 }}
                             >
                                 Top 100
+                            </Button>
+                            <Button
+                                color="inherit"
+                                onClick={() => handleFetchClick(500)}
+                                disabled={loading || streams.length === 0 || scanCount === 500}
+                                sx={{ mr: 1 }}
+                            >
+                                Top 500
                             </Button>
                             <Button
                                 color="inherit"
@@ -994,7 +1017,7 @@
                                                 >
                                                     <MenuItem value="all">All Languages</MenuItem>
                                                     {uniqueLanguages.map(lang => (
-                                                        <MenuItem key={lang} value={lang}>{lang.toUpperCase()}</MenuItem>
+                                                        <MenuItem key={lang} value={lang}>{lang.toUpperCase()} - {getLanguageName(lang)}</MenuItem>
                                                     ))}
                                                 </Select>
                                             </FormControl>
@@ -1501,7 +1524,7 @@
                                                 Language
                                             </Typography>
                                             <Typography variant="body1">
-                                                {streamDetailsModal.stream.language?.toUpperCase() || 'Unknown'}
+                                                {streamDetailsModal.stream.language ? `${streamDetailsModal.stream.language.toUpperCase()} - ${getLanguageName(streamDetailsModal.stream.language)}` : 'Unknown'}
                                             </Typography>
                                         </Grid>
 
