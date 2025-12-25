@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Twitch CV Analytics</title>
+    <title>Twitch Authenticated vs Viewers</title>
 
     <!-- Material-UI CSS -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" />
@@ -187,7 +187,7 @@
             const [order, setOrder] = React.useState('desc');
             const [gameFilter, setGameFilter] = React.useState('all');
             const [languageFilter, setLanguageFilter] = React.useState('all');
-            const [cvFilter, setCvFilter] = React.useState('all');
+            const [avFilter, setAvFilter] = React.useState('all');
             const [page, setPage] = React.useState(0);
             const [rowsPerPage, setRowsPerPage] = React.useState(50);
             const [scanCount, setScanCount] = React.useState(100);
@@ -198,7 +198,8 @@
 
             const chartRefs = {
                 gamesChart: React.useRef(null),
-                chattersCountChart: React.useRef(null)
+                authenticatedCountChart: React.useRef(null),
+                viewersVsPercentageChart: React.useRef(null)
             };
 
             const chartInstances = React.useRef({});
@@ -245,11 +246,11 @@
                     filtered = filtered.filter(s => s.language === languageFilter);
                 }
 
-                // Filter by C/V type
-                if (cvFilter !== 'all') {
+                // Filter by A/V type
+                if (avFilter !== 'all') {
                     filtered = filtered.filter(s => {
-                        const indicator = getChatterIndicator(s.chatterPercentage || 0);
-                        return indicator.label === cvFilter;
+                        const indicator = getAuthenticatedIndicator(s.authenticatedPercentage || 0);
+                        return indicator.label === avFilter;
                     });
                 }
 
@@ -285,13 +286,13 @@
                             aVal = (a.title || '').toLowerCase();
                             bVal = (b.title || '').toLowerCase();
                             break;
-                        case 'chatters':
-                            aVal = Number(a.chatters) || 0;
-                            bVal = Number(b.chatters) || 0;
+                        case 'authenticated':
+                            aVal = Number(a.authenticated) || 0;
+                            bVal = Number(b.authenticated) || 0;
                             break;
-                        case 'chatterPercentage':
-                            aVal = Number(a.chatterPercentage) || 0;
-                            bVal = Number(b.chatterPercentage) || 0;
+                        case 'authenticatedPercentage':
+                            aVal = Number(a.authenticatedPercentage) || 0;
+                            bVal = Number(b.authenticatedPercentage) || 0;
                             break;
                         default:
                             aVal = Number(a.viewersCount) || 0;
@@ -315,7 +316,7 @@
 
                 setFilteredStreams(filtered);
                 setPage(0); // Reset to first page when filter/sort changes
-            }, [streams, searchTerm, orderBy, order, gameFilter, languageFilter, cvFilter]);
+            }, [streams, searchTerm, orderBy, order, gameFilter, languageFilter, avFilter]);
 
             // Update charts when filtered streams change (debounced)
             React.useEffect(() => {
@@ -445,22 +446,22 @@
                     // Trim to target count if we got more
                     allStreams = allStreams.slice(0, targetCount);
 
-                    // Fetch chatter counts for all streams
+                    // Fetch authenticated user counts for all streams
                     const logins = allStreams.map(s => s.broadcaster?.login).filter(Boolean);
                     if (logins.length > 0) {
-                        const chatterCounts = await fetchChatterCounts(logins);
-                        // Add chatter data to streams
+                        const authenticatedCounts = await fetchAuthenticatedCounts(logins);
+                        // Add authenticated data to streams
                         allStreams.forEach(stream => {
                             const login = stream.broadcaster?.login;
-                            if (login && chatterCounts[login] !== undefined) {
-                                stream.chatters = chatterCounts[login];
-                                stream.chatterPercentage = stream.viewersCount > 0
-                                    ? (chatterCounts[login] / stream.viewersCount) * 100
+                            if (login && authenticatedCounts[login] !== undefined) {
+                                stream.authenticated = authenticatedCounts[login];
+                                stream.authenticatedPercentage = stream.viewersCount > 0
+                                    ? (authenticatedCounts[login] / stream.viewersCount) * 100
                                     : 0;
                             } else {
                                 // Set to 0 for streams without login data
-                                stream.chatters = 0;
-                                stream.chatterPercentage = 0;
+                                stream.authenticated = 0;
+                                stream.authenticatedPercentage = 0;
                             }
                         });
                     }
@@ -475,8 +476,8 @@
                 }
             };
 
-            const fetchChatterCounts = async (streamLogins) => {
-                const chatterCounts = {};
+            const fetchAuthenticatedCounts = async (streamLogins) => {
+                const authenticatedCounts = {};
                 const batchSize = 20; // GraphQL supports up to 20 queries in one request
 
                 // Create all batches
@@ -529,7 +530,7 @@
                         });
                         return batchResults;
                     } catch (err) {
-                        console.error('Error fetching chatter data for batch:', err);
+                        console.error('Error fetching authenticated user data for batch:', err);
                         // If batch fails, set all to 0
                         const batchResults = {};
                         batch.forEach(login => {
@@ -544,10 +545,10 @@
 
                 // Merge all results
                 allBatchResults.forEach(batchResult => {
-                    Object.assign(chatterCounts, batchResult);
+                    Object.assign(authenticatedCounts, batchResult);
                 });
 
-                return chatterCounts;
+                return authenticatedCounts;
             };
 
 
@@ -616,9 +617,9 @@
                     });
                 }
 
-                // Chatter Percentage Distribution
-                if (chartRefs.chattersCountChart.current) {
-                    const ctx = chartRefs.chattersCountChart.current.getContext('2d');
+                // Authenticated Percentage Distribution
+                if (chartRefs.authenticatedCountChart.current) {
+                    const ctx = chartRefs.authenticatedCountChart.current.getContext('2d');
                     const percentageGroups = {
                         '0-49%': { count: 0, color: '#fff3e0' },
                         '50-69%': { count: 0, color: '#ffe0b2' },
@@ -630,7 +631,7 @@
                     };
 
                     filteredStreams.forEach(s => {
-                        const percentage = s.chatterPercentage || 0;
+                        const percentage = s.authenticatedPercentage || 0;
                         if (percentage < 50) {
                             percentageGroups['0-49%'].count++;
                         } else if (percentage < 70) {
@@ -648,7 +649,7 @@
                         }
                     });
 
-                    chartInstances.current.chattersCountChart = new Chart(ctx, {
+                    chartInstances.current.authenticatedCountChart = new Chart(ctx, {
                         type: 'bar',
                         data: {
                             labels: Object.keys(percentageGroups),
@@ -682,9 +683,87 @@
                         }
                     });
                 }
+
+                // Scatter Plot: Viewers vs A/V%
+                if (chartRefs.viewersVsPercentageChart.current) {
+                    const ctx = chartRefs.viewersVsPercentageChart.current.getContext('2d');
+                    const scatterData = filteredStreams
+                        .filter(s => s.authenticatedPercentage !== undefined)
+                        .map(s => {
+                            const actualPercentage = s.authenticatedPercentage;
+                            const displayPercentage = Math.min(actualPercentage, 200); // Cap at 200%
+                            const indicator = getAuthenticatedIndicator(actualPercentage);
+                            return {
+                                x: s.viewersCount,
+                                y: displayPercentage,
+                                actualY: actualPercentage, // Store actual value for tooltip
+                                label: s.broadcaster?.displayName || 'Unknown',
+                                backgroundColor: indicator.color + 'aa'
+                            };
+                        });
+
+                    chartInstances.current.viewersVsPercentageChart = new Chart(ctx, {
+                        type: 'scatter',
+                        data: {
+                            datasets: [{
+                                label: 'Streams',
+                                data: scatterData,
+                                backgroundColor: scatterData.map(d => d.backgroundColor),
+                                borderColor: scatterData.map(d => d.backgroundColor.slice(0, -2)),
+                                pointRadius: 5,
+                                pointHoverRadius: 7
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: {
+                                    display: false
+                                },
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function (context) {
+                                            const point = context.raw;
+                                            const percentage = point.actualY.toFixed(1);
+                                            const suffix = point.actualY > 200 ? ' (capped at 200% for display)' : '';
+                                            return `${point.label}: ${point.x.toLocaleString()} viewers, ${percentage}%${suffix}`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    type: 'linear',
+                                    position: 'bottom',
+                                    title: {
+                                        display: true,
+                                        text: 'Viewers'
+                                    },
+                                    ticks: {
+                                        callback: function (value) {
+                                            return value >= 1000 ? (value / 1000) + 'K' : value;
+                                        }
+                                    }
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: 'A/V Percentage (%)'
+                                    },
+                                    beginAtZero: true,
+                                    max: 200 // Set max to 200%
+                                }
+                            }
+                        }
+                    });
+                }
             };
 
-            const getChatterIndicator = (percentage) => {
+            const getAuthenticatedIndicator = (percentage) => {
                 if (percentage < 70) return { label: 'LOW', color: '#f44336' };
                 if (percentage < 90) return { label: 'MEDIUM', color: '#ff9800' };
                 if (percentage < 110) return { label: 'NORMAL', color: '#2196f3' };
@@ -730,11 +809,11 @@
                     : 0;
                 const partners = filteredStreams.filter(s => s.broadcaster?.roles?.isPartner).length;
 
-                // Chatter stats
-                const streamsWithChatters = filteredStreams.filter(s => s.chatters !== undefined);
-                const totalChatters = streamsWithChatters.reduce((sum, s) => sum + (s.chatters || 0), 0);
-                const avgChatterPercentage = totalViewers > 0
-                    ? (totalChatters / totalViewers) * 100
+                // Authenticated stats
+                const streamsWithAuthenticated = filteredStreams.filter(s => s.authenticated !== undefined);
+                const totalAuthenticated = streamsWithAuthenticated.reduce((sum, s) => sum + (s.authenticated || 0), 0);
+                const avgAuthenticatedPercentage = totalViewers > 0
+                    ? (totalAuthenticated / totalViewers) * 100
                     : 0;
 
                 return {
@@ -742,8 +821,8 @@
                     totalViewers,
                     avgViewers,
                     partners,
-                    totalChatters,
-                    avgChatterPercentage
+                    totalAuthenticated,
+                    avgAuthenticatedPercentage
                 };
             }, [filteredStreams]);
 
@@ -752,12 +831,12 @@
                     <AppBar position="static">
                         <Toolbar>
                             <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-                                Twitch CV Analytics
+                                Twitch A/V Analytics
                             </Typography>
                             <Button
                                 color="inherit"
                                 onClick={() => handleFetchClick(100)}
-                                disabled={loading || (streams.length > 0 && scanCount === 100)}
+                                disabled={loading || streams.length === 0 || scanCount === 100}
                                 sx={{ mr: 1 }}
                             >
                                 Top 100
@@ -765,7 +844,7 @@
                             <Button
                                 color="inherit"
                                 onClick={() => handleFetchClick(1000)}
-                                disabled={loading || (streams.length > 0 && scanCount === 1000)}
+                                disabled={loading || streams.length === 0 || scanCount === 1000}
                                 sx={{ mr: 1 }}
                             >
                                 Top 1000
@@ -773,7 +852,7 @@
                             <Button
                                 color="inherit"
                                 onClick={() => handleFetchClick(2000)}
-                                disabled={loading || (streams.length > 0 && scanCount === 2000)}
+                                disabled={loading || streams.length === 0 || scanCount === 2000}
                                 sx={{ mr: 1 }}
                             >
                                 Top 2000
@@ -802,10 +881,10 @@
                         {!loading && streams.length === 0 && (
                             <Alert severity="info" sx={{ mb: 3 }}>
                                 <Typography variant="h6" gutterBottom>
-                                    Welcome to Twitch CV Analytics!
+                                    Welcome to Twitch A/V Analytics!
                                 </Typography>
                                 <Typography variant="body1">
-                                    Click one of the buttons above (Top 100, Top 1000, or Top 2000) to begin retrieving and analyzing Twitch stream data.
+                                    Click the Refresh button above to begin retrieving and analyzing Twitch stream data.
                                 </Typography>
                             </Alert>
                         )}
@@ -840,10 +919,10 @@
                                 <Card sx={{ background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)' }}>
                                     <CardContent>
                                         <Typography color="white" gutterBottom>
-                                            Total Chatters
+                                            Total Authenticated
                                         </Typography>
                                         <Typography variant="h4" color="white">
-                                            {stats.totalChatters.toLocaleString()}
+                                            {stats.totalAuthenticated.toLocaleString()}
                                         </Typography>
                                     </CardContent>
                                 </Card>
@@ -855,7 +934,7 @@
                                             Avg Engagement
                                         </Typography>
                                         <Typography variant="h4" color="white">
-                                            {stats.avgChatterPercentage.toFixed(0)}%
+                                            {stats.avgAuthenticatedPercentage.toFixed(0)}%
                                         </Typography>
                                     </CardContent>
                                 </Card>
@@ -923,58 +1002,58 @@
                                         <Grid item xs={12}>
                                             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                                                 <Typography variant="body2" sx={{ mr: 1, color: 'text.secondary' }}>
-                                                    C/V Type:
+                                                    A/V Type:
                                                 </Typography>
                                                 <Button
-                                                    variant={cvFilter === 'all' ? 'contained' : 'outlined'}
+                                                    variant={avFilter === 'all' ? 'contained' : 'outlined'}
                                                     size="small"
-                                                    onClick={() => setCvFilter('all')}
+                                                    onClick={() => setAvFilter('all')}
                                                 >
                                                     All
                                                 </Button>
                                                 <Button
-                                                    variant={cvFilter === 'LOW' ? 'contained' : 'outlined'}
+                                                    variant={avFilter === 'LOW' ? 'contained' : 'outlined'}
                                                     size="small"
-                                                    onClick={() => setCvFilter('LOW')}
+                                                    onClick={() => setAvFilter('LOW')}
                                                     sx={{
-                                                        borderColor: cvFilter === 'LOW' ? undefined : '#f44336',
-                                                        color: cvFilter === 'LOW' ? undefined : '#f44336',
+                                                        borderColor: avFilter === 'LOW' ? undefined : '#f44336',
+                                                        color: avFilter === 'LOW' ? undefined : '#f44336',
                                                         '&:hover': { borderColor: '#f44336', backgroundColor: 'rgba(244, 67, 54, 0.08)' }
                                                     }}
                                                 >
                                                     Low (&lt;70%)
                                                 </Button>
                                                 <Button
-                                                    variant={cvFilter === 'MEDIUM' ? 'contained' : 'outlined'}
+                                                    variant={avFilter === 'MEDIUM' ? 'contained' : 'outlined'}
                                                     size="small"
-                                                    onClick={() => setCvFilter('MEDIUM')}
+                                                    onClick={() => setAvFilter('MEDIUM')}
                                                     sx={{
-                                                        borderColor: cvFilter === 'MEDIUM' ? undefined : '#ff9800',
-                                                        color: cvFilter === 'MEDIUM' ? undefined : '#ff9800',
+                                                        borderColor: avFilter === 'MEDIUM' ? undefined : '#ff9800',
+                                                        color: avFilter === 'MEDIUM' ? undefined : '#ff9800',
                                                         '&:hover': { borderColor: '#ff9800', backgroundColor: 'rgba(255, 152, 0, 0.08)' }
                                                     }}
                                                 >
                                                     Medium (70-89%)
                                                 </Button>
                                                 <Button
-                                                    variant={cvFilter === 'NORMAL' ? 'contained' : 'outlined'}
+                                                    variant={avFilter === 'NORMAL' ? 'contained' : 'outlined'}
                                                     size="small"
-                                                    onClick={() => setCvFilter('NORMAL')}
+                                                    onClick={() => setAvFilter('NORMAL')}
                                                     sx={{
-                                                        borderColor: cvFilter === 'NORMAL' ? undefined : '#2196f3',
-                                                        color: cvFilter === 'NORMAL' ? undefined : '#2196f3',
+                                                        borderColor: avFilter === 'NORMAL' ? undefined : '#2196f3',
+                                                        color: avFilter === 'NORMAL' ? undefined : '#2196f3',
                                                         '&:hover': { borderColor: '#2196f3', backgroundColor: 'rgba(33, 150, 243, 0.08)' }
                                                     }}
                                                 >
                                                     Normal (90-109%)
                                                 </Button>
                                                 <Button
-                                                    variant={cvFilter === 'HIGH' ? 'contained' : 'outlined'}
+                                                    variant={avFilter === 'HIGH' ? 'contained' : 'outlined'}
                                                     size="small"
-                                                    onClick={() => setCvFilter('HIGH')}
+                                                    onClick={() => setAvFilter('HIGH')}
                                                     sx={{
-                                                        borderColor: cvFilter === 'HIGH' ? undefined : '#4caf50',
-                                                        color: cvFilter === 'HIGH' ? undefined : '#4caf50',
+                                                        borderColor: avFilter === 'HIGH' ? undefined : '#4caf50',
+                                                        color: avFilter === 'HIGH' ? undefined : '#4caf50',
                                                         '&:hover': { borderColor: '#4caf50', backgroundColor: 'rgba(76, 175, 80, 0.08)' }
                                                     }}
                                                 >
@@ -1056,20 +1135,20 @@
                                                     </TableCell>
                                                     <TableCell>
                                                         <TableSortLabel
-                                                            active={orderBy === 'chatters'}
-                                                            direction={orderBy === 'chatters' ? order : 'asc'}
-                                                            onClick={() => handleSort('chatters')}
+                                                            active={orderBy === 'authenticated'}
+                                                            direction={orderBy === 'authenticated' ? order : 'asc'}
+                                                            onClick={() => handleSort('authenticated')}
                                                         >
-                                                            Chatters
+                                                            Authenticated
                                                         </TableSortLabel>
                                                     </TableCell>
                                                     <TableCell>
                                                         <TableSortLabel
-                                                            active={orderBy === 'chatterPercentage'}
-                                                            direction={orderBy === 'chatterPercentage' ? order : 'asc'}
-                                                            onClick={() => handleSort('chatterPercentage')}
+                                                            active={orderBy === 'authenticatedPercentage'}
+                                                            direction={orderBy === 'authenticatedPercentage' ? order : 'asc'}
+                                                            onClick={() => handleSort('authenticatedPercentage')}
                                                         >
-                                                            C/V%
+                                                            A/V%
                                                         </TableSortLabel>
                                                     </TableCell>
                                                 </TableRow>
@@ -1136,9 +1215,9 @@
                                                             </Typography>
                                                         </TableCell>
                                                         <TableCell>
-                                                            {stream.chatters !== undefined ? (
+                                                            {stream.authenticated !== undefined ? (
                                                                 <Typography variant="body1" fontWeight="bold">
-                                                                    {stream.chatters.toLocaleString()}
+                                                                    {stream.authenticated.toLocaleString()}
                                                                 </Typography>
                                                             ) : (
                                                                 <Typography variant="body2" color="textSecondary">
@@ -1147,16 +1226,16 @@
                                                             )}
                                                         </TableCell>
                                                         <TableCell>
-                                                            {stream.chatterPercentage !== undefined ? (
+                                                            {stream.authenticatedPercentage !== undefined ? (
                                                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                                                                     <Typography variant="body1" fontWeight="bold">
-                                                                        {stream.chatterPercentage.toFixed(0)}%
+                                                                        {stream.authenticatedPercentage.toFixed(0)}%
                                                                     </Typography>
                                                                     <Chip
-                                                                        label={getChatterIndicator(stream.chatterPercentage).label}
+                                                                        label={getAuthenticatedIndicator(stream.authenticatedPercentage).label}
                                                                         size="small"
                                                                         sx={{
-                                                                            bgcolor: getChatterIndicator(stream.chatterPercentage).color,
+                                                                            bgcolor: getAuthenticatedIndicator(stream.authenticatedPercentage).color,
                                                                             color: 'white',
                                                                             fontWeight: 'bold'
                                                                         }}
@@ -1217,10 +1296,19 @@
                             <Grid item xs={12} lg={4}>
                                 <Paper sx={{ p: 2, mb: 2 }}>
                                     <Typography variant="h6" sx={{ mb: 2 }}>
-                                        C/V Distribution
+                                        A/V Distribution
                                     </Typography>
                                     <div className="chart-container" style={{ height: '300px' }}>
-                                        <canvas ref={chartRefs.chattersCountChart}></canvas>
+                                        <canvas ref={chartRefs.authenticatedCountChart}></canvas>
+                                    </div>
+                                </Paper>
+
+                                <Paper sx={{ p: 2, mt: 2 }}>
+                                    <Typography variant="h6" sx={{ mb: 2 }}>
+                                        Viewers vs A/V Percentage
+                                    </Typography>
+                                    <div className="chart-container" style={{ height: '350px' }}>
+                                        <canvas ref={chartRefs.viewersVsPercentageChart}></canvas>
                                     </div>
                                 </Paper>
 
@@ -1352,20 +1440,20 @@
                                                 <Grid item xs={6} sm={3}>
                                                     <Paper sx={{ p: 2, textAlign: 'center' }}>
                                                         <Typography variant="body2" color="text.secondary">
-                                                            Chatters
+                                                            Authenticated
                                                         </Typography>
                                                         <Typography variant="h5" fontWeight="bold">
-                                                            {streamDetailsModal.stream.chatters?.toLocaleString() || 0}
+                                                            {streamDetailsModal.stream.authenticated?.toLocaleString() || 0}
                                                         </Typography>
                                                     </Paper>
                                                 </Grid>
                                                 <Grid item xs={6} sm={3}>
                                                     <Paper sx={{ p: 2, textAlign: 'center' }}>
                                                         <Typography variant="body2" color="text.secondary">
-                                                            C/V Ratio
+                                                            A/V Ratio
                                                         </Typography>
                                                         <Typography variant="h5" fontWeight="bold">
-                                                            {streamDetailsModal.stream.chatterPercentage?.toFixed(0) || 0}%
+                                                            {streamDetailsModal.stream.authenticatedPercentage?.toFixed(0) || 0}%
                                                         </Typography>
                                                     </Paper>
                                                 </Grid>
@@ -1375,9 +1463,9 @@
                                                             Status
                                                         </Typography>
                                                         <Chip
-                                                            label={getChatterIndicator(streamDetailsModal.stream.chatterPercentage || 0).label}
+                                                            label={getAuthenticatedIndicator(streamDetailsModal.stream.authenticatedPercentage || 0).label}
                                                             sx={{
-                                                                bgcolor: getChatterIndicator(streamDetailsModal.stream.chatterPercentage || 0).color,
+                                                                bgcolor: getAuthenticatedIndicator(streamDetailsModal.stream.authenticatedPercentage || 0).color,
                                                                 color: 'white',
                                                                 fontWeight: 'bold',
                                                                 mt: 1
